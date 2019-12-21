@@ -1,102 +1,113 @@
 import React, { Component } from 'react';
-import { Keybord, ActivityIndicator } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons'
-import axios from 'axios';
+import Header from '../../components/header';
+import { connect } from 'react-redux';
+
+import Icon from 'react-native-vector-icons/FontAwesome';
+import api from '../../services/api';
+import Reactotron from 'reactotron-react-native'
+
+
+import * as CartActions from '../../redux/modules/cart/index'
+import formatPrice from '../../util/format';;
+
 
 import { 
-  Container, Form, Input, SubmitButton, List, User, Avatar, Name, Bio,
-  ProfileButton, ProfileButtonText
+  Container,
+  ListProduct, 
+  Product, 
+  ImageList, 
+  ProductText,
+  ProductPrice,
+  ProductButton,
+  DivButton,
+  DivButtonText,
+  ProductButtonText
 } from './styles';
 
-export default class Main extends Component {
+class Main extends Component {
+  static navigationOptions = {
+    header: null,
+  };
+
   state = {
-    newUser: '',
-    users: [],
-    loading: false,
-    notFound: false, 
+    products: [],
   };
 
-  handleAddUser = async () => {
-      const { users, newUser } = this.state;
+  addToCart = id => 
+  {
+    const { dispatch } = this.props;
 
-      this.setState({loading: true})
-
-      try{
-        const response = await axios.get(`https://api.github.com/users/${newUser}`)
-
-        const data = {
-          name: response.data.name, 
-          login: response.data.login,
-          bio: response.data.bio, 
-          avatar: response.data.avatar_url
-        };
-
-
-        this.setState({
-          users: [...users, data],
-          newUser: '',
-          loading: false, 
-        })
-
-      }catch(err)
-      {
-        this.setState({
-          loading: false,
-        })
-      }
-  
-  };
-
-  handleNavigate = (user) => {
-    const { navigation } = this.props;
-
-    navigation.navigate('User', { user });
+    dispatch(CartActions.addToCartRequest(id))
   }
-  
+
+  async componentDidMount()
+  {
+      const response = await api.get('/product');
+
+      const data = response.data.products.map(product => ({
+        ...product, 
+        priceFormatted: formatPrice(product.price),
+      }));  
+
+      this.setState({
+        products: data
+      })
+  }
+
+  mapState(index)
+  {
+    const { cart } = this.props;
+
+    const amount = cart.reduce((amount, product) => {
+      amount[product.id] = product.amount;
+      
+      return amount
+    }, {})
+
+    if(amount[index] > 0)
+    {
+      return amount[index]
+    }
+
+    return 0;
+  }
+
   render()
   {
-    const { users, newUser, loading } = this.state;
-
+    const { products } = this.state;
     return (
-      <Container>
-        <Form>
-          <Input
-            autoCorrect={false}
-            autoCapitalize="none"
-            placeholder="Adicionar usuário"
-            value={newUser}
-            onChangeText={text => this.setState({ newUser: text })}
-            returnKeyType="send"
-            onSubmitEditing={this.handleAddUser}
-          />
-          <SubmitButton loading={loading} onPress={this.handleAddUser}>
-            { loading ? 
-              <ActivityIndicator color="FFF" /> : 
-              <Icon name="add" size={20} color="#FFF"/>
-            }
-          </SubmitButton>
-        </Form>
+      <>
+        <Header />
+        <Container>
+            <ListProduct 
+              horizontal={true}
+              data={products}
+              keyExtractor={product => product.id}
+              renderItem={({ item }) => (
+                <Product>
+                  <ImageList source={{ uri: item.image}}/>
+                  <ProductText>{item.title}</ProductText>
+                  <ProductPrice>{item.priceFormatted}</ProductPrice>
 
-        <List 
-          data={users}
-          keyExtracotr={user => user.login}
-          renderItem={({ item }) => (
-            <User>
-              <Avatar source={{ uri: item.avatar }} />
-              <Name> {item.name} </Name>
-              <Bio> {item.bio} </Bio>
+                  <ProductButton onPress={() => this.addToCart(item.id)}>
+                      <DivButton>
+                        <Icon name="shopping-cart" size={20} color="#FFF" />
+                        <DivButtonText>{this.mapState(item.id)}</DivButtonText>
+                      </DivButton>
 
-              <ProfileButton onPress={() => this.handleNavigate(item)}> 
-                <ProfileButtonText> Ver perfil </ProfileButtonText>
-              </ProfileButton>
-            </User>
-          )}
-        />
-      </Container> 
+                      <ProductButtonText>Adicionar</ProductButtonText>
+                  </ProductButton>
+                </Product>
+              )}
+            />
+    
+      </Container>
+      </>
+      
     );
   };
 }
 
-Main.navigationOptions = {
-  title: 'Usuários'
-};
+export default connect(state => ({
+  cart: state.cart
+}))(Main);
